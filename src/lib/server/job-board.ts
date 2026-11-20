@@ -19,5 +19,3 @@ export function createJobBoard(db: Database) {
 		}
 	};
 }
-
-export type JobBoard = ReturnType<typeof createJobBoard>;
