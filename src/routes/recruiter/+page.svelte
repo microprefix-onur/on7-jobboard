@@ -26,23 +26,38 @@
 	{:else}
 		<ul class="divide-y divide-gray-200 rounded border border-gray-200">
 			{#each data.postings as posting (posting.id)}
-				<li class="flex items-center justify-between px-4 py-3">
-					<a
-						href={resolve('/recruiter/postings/[id]/edit', { id: posting.id })}
-						class="font-medium hover:underline"
-					>
-						{posting.title}
-					</a>
-					<span
-						class={[
-							'rounded px-2 py-0.5 text-xs',
-							posting.status === 'open'
-								? 'bg-green-100 text-green-800'
-								: 'bg-gray-100 text-gray-700'
-						]}
-					>
-						{postingStatusLabel[posting.status]}
-					</span>
+				<li class="flex items-center justify-between gap-4 px-4 py-3">
+					<div>
+						<a
+							href={resolve('/recruiter/postings/[id]', { id: posting.id })}
+							class="font-medium hover:underline"
+						>
+							{posting.title}
+						</a>
+						<span class="block text-sm text-gray-600">
+							{posting.applicationCount === 1
+								? '1 Bewerbung'
+								: `${posting.applicationCount} Bewerbungen`}
+						</span>
+					</div>
+					<div class="flex items-center gap-3">
+						<span
+							class={[
+								'rounded px-2 py-0.5 text-xs',
+								posting.status === 'open'
+									? 'bg-green-100 text-green-800'
+									: 'bg-gray-100 text-gray-700'
+							]}
+						>
+							{postingStatusLabel[posting.status]}
+						</span>
+						<a
+							href={resolve('/recruiter/postings/[id]/edit', { id: posting.id })}
+							class="text-sm text-blue-600 hover:underline"
+						>
+							Bearbeiten
+						</a>
+					</div>
 				</li>
 			{/each}
 		</ul>

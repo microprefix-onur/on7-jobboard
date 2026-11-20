@@ -5,6 +5,10 @@ export function postingNotFound(): never {
 	error(404, 'Diese Stelle gibt es nicht.');
 }
 
+export function applicationNotFound(): never {
+	error(404, 'Diese Bewerbung gibt es nicht.');
+}
+
 // Maps the domain module's field errors onto a Superforms form.
 export function failWithFieldErrors<T extends Record<string, unknown>>(
 	form: SuperValidated<T>,

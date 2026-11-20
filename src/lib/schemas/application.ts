@@ -18,3 +18,7 @@ export const applicationSchema = z.object({
 });
 
 export type ApplicationInput = z.input<typeof applicationSchema>;
+
+export const applicationStatusSchema = z.object({
+	status: z.enum(applicationStatuses, 'Bitte wähle einen gültigen Status.')
+});

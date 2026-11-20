@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createJobBoard } from './job-board';
-import { insertJobPosting, insertRecruiter, testDb } from '../../../test/db';
+import { insertApplication, insertJobPosting, insertRecruiter, testDb } from '../../../test/db';
 
 const jobBoard = createJobBoard(testDb);
 
@@ -84,6 +84,28 @@ describe('listOwnPostings', () => {
 			expect.arrayContaining([
 				{ title: 'Buchhalter', status: 'open' },
 				{ title: 'Lagerist', status: 'closed' }
+			])
+		);
+		expect(postings).toHaveLength(2);
+	});
+});
+
+describe('listOwnPostings application counts', () => {
+	it('counts the applications of each own job posting, including zero', async () => {
+		const recruiter = await insertRecruiter();
+		const busy = await insertJobPosting({ recruiterId: recruiter.id, title: 'Gefragt' });
+		await insertJobPosting({ recruiterId: recruiter.id, title: 'Ruhig' });
+		const foreign = await insertJobPosting({ title: 'Fremd' });
+		await insertApplication({ jobPostingId: busy.id });
+		await insertApplication({ jobPostingId: busy.id });
+		await insertApplication({ jobPostingId: foreign.id });
+
+		const postings = await jobBoard.listOwnPostings(recruiter.id);
+
+		expect(postings.map(({ title, applicationCount }) => ({ title, applicationCount }))).toEqual(
+			expect.arrayContaining([
+				{ title: 'Gefragt', applicationCount: 2 },
+				{ title: 'Ruhig', applicationCount: 0 }
 			])
 		);
 		expect(postings).toHaveLength(2);
@@ -334,5 +356,96 @@ describe('getPublicPosting', () => {
 		for (const id of [randomUUID(), 'not-a-uuid']) {
 			expect(await jobBoard.getPublicPosting(id)).toEqual({ type: 'not-found' });
 		}
+	});
+});
+
+describe('listApplications', () => {
+	it('lists the applications to an own job posting, newest first', async () => {
+		const recruiter = await insertRecruiter();
+		const posting = await insertJobPosting({ recruiterId: recruiter.id });
+		const otherPosting = await insertJobPosting({ recruiterId: recruiter.id });
+		await insertApplication({
+			jobPostingId: posting.id,
+			applicantName: 'Erste',
+			createdAt: new Date('2026-11-01T10:00:00Z')
+		});
+		await insertApplication({
+			jobPostingId: posting.id,
+			applicantName: 'Zweite',
+			applicantEmail: 'zweite@example.com',
+			coverText: 'Zeile 1\nZeile 2',
+			status: 'invited',
+			createdAt: new Date('2026-11-02T10:00:00Z')
+		});
+		await insertApplication({ jobPostingId: otherPosting.id, applicantName: 'Andere Stelle' });
+
+		const result = await jobBoard.listApplications(recruiter.id, posting.id);
+
+		expect(result.type).toBe('success');
+		if (result.type !== 'success') return;
+		expect(result.applications.map((a) => a.applicantName)).toEqual(['Zweite', 'Erste']);
+		expect(result.applications[0]).toMatchObject({
+			applicantName: 'Zweite',
+			applicantEmail: 'zweite@example.com',
+			coverText: 'Zeile 1\nZeile 2',
+			status: 'invited',
+			createdAt: new Date('2026-11-02T10:00:00Z')
+		});
+	});
+
+	it("returns not found for another recruiter's job posting, an unknown id and a malformed id", async () => {
+		const recruiterB = await insertRecruiter();
+		const postingOfA = await insertJobPosting();
+		await insertApplication({ jobPostingId: postingOfA.id });
+
+		for (const id of [postingOfA.id, randomUUID(), 'not-a-uuid']) {
+			expect(await jobBoard.listApplications(recruiterB.id, id)).toEqual({ type: 'not-found' });
+		}
+	});
+});
+
+describe('setApplicationStatus', () => {
+	it('changes the application status in any direction, also on a closed job posting', async () => {
+		const recruiter = await insertRecruiter();
+		const posting = await insertJobPosting({ recruiterId: recruiter.id, status: 'closed' });
+		const { id } = await insertApplication({ jobPostingId: posting.id });
+
+		for (const status of ['invited', 'rejected', 'new', 'rejected', 'invited', 'new']) {
+			expect(await jobBoard.setApplicationStatus(recruiter.id, id, status)).toMatchObject({
+				type: 'success'
+			});
+			const listed = await jobBoard.listApplications(recruiter.id, posting.id);
+			expect(listed).toMatchObject({ applications: [{ id, status }] });
+		}
+	});
+
+	it('rejects a status other than new, invited or rejected', async () => {
+		const recruiter = await insertRecruiter();
+		const posting = await insertJobPosting({ recruiterId: recruiter.id });
+		const { id } = await insertApplication({ jobPostingId: posting.id });
+
+		expect(await jobBoard.setApplicationStatus(recruiter.id, id, 'hired')).toEqual({
+			type: 'invalid',
+			fieldErrors: { status: [expect.any(String)] }
+		});
+		expect(await jobBoard.listApplications(recruiter.id, posting.id)).toMatchObject({
+			applications: [{ id, status: 'new' }]
+		});
+	});
+
+	it("returns not found for another recruiter's application, an unknown id and a malformed id", async () => {
+		const recruiterA = await insertRecruiter();
+		const recruiterB = await insertRecruiter();
+		const posting = await insertJobPosting({ recruiterId: recruiterA.id });
+		const { id } = await insertApplication({ jobPostingId: posting.id });
+
+		for (const applicationId of [id, randomUUID(), 'not-a-uuid']) {
+			expect(await jobBoard.setApplicationStatus(recruiterB.id, applicationId, 'rejected')).toEqual(
+				{ type: 'not-found' }
+			);
+		}
+		expect(await jobBoard.listApplications(recruiterA.id, posting.id)).toMatchObject({
+			applications: [{ id, status: 'new' }]
+		});
 	});
 });

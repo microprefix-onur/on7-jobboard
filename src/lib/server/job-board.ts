@@ -1,11 +1,15 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import {
 	jobPostingSchema,
 	postingStatusSchema,
 	type JobPostingInput
 } from '../schemas/job-posting';
-import { applicationSchema, type ApplicationInput } from '../schemas/application';
+import {
+	applicationSchema,
+	applicationStatusSchema,
+	type ApplicationInput
+} from '../schemas/application';
 import type { Database } from './db/client';
 import { application, jobPosting } from './db/schema';
 
@@ -45,10 +49,13 @@ export function createJobBoard(db: Database) {
 				.select({
 					id: jobPosting.id,
 					title: jobPosting.title,
-					status: jobPosting.status
+					status: jobPosting.status,
+					applicationCount: count(application.id)
 				})
 				.from(jobPosting)
+				.leftJoin(application, eq(application.jobPostingId, jobPosting.id))
 				.where(eq(jobPosting.recruiterId, recruiterId))
+				.groupBy(jobPosting.id)
 				.orderBy(desc(jobPosting.createdAt));
 		},
 
@@ -89,6 +96,54 @@ export function createJobBoard(db: Database) {
 			if (!parsed.success) return invalid(parsed.error);
 
 			return updateOwnPosting(recruiterId, postingId, parsed.data);
+		},
+
+		async listApplications(recruiterId: string, postingId: string) {
+			if (!isUuid(postingId)) return notFound;
+			const [posting] = await db
+				.select({ id: jobPosting.id })
+				.from(jobPosting)
+				.where(ownPostingFilter(recruiterId, postingId));
+			if (!posting) return notFound;
+
+			const applications = await db
+				.select({
+					id: application.id,
+					applicantName: application.applicantName,
+					applicantEmail: application.applicantEmail,
+					coverText: application.coverText,
+					status: application.status,
+					createdAt: application.createdAt
+				})
+				.from(application)
+				.where(eq(application.jobPostingId, postingId))
+				.orderBy(desc(application.createdAt));
+			return { type: 'success' as const, applications };
+		},
+
+		async setApplicationStatus(recruiterId: string, applicationId: string, status: string) {
+			if (!isUuid(applicationId)) return notFound;
+			const parsed = applicationStatusSchema.safeParse({ status });
+			if (!parsed.success) return invalid(parsed.error);
+
+			// Ownership is part of the update: only applications to the recruiter's own job postings match.
+			const [updated] = await db
+				.update(application)
+				.set(parsed.data)
+				.where(
+					and(
+						eq(application.id, applicationId),
+						inArray(
+							application.jobPostingId,
+							db
+								.select({ id: jobPosting.id })
+								.from(jobPosting)
+								.where(eq(jobPosting.recruiterId, recruiterId))
+						)
+					)
+				)
+				.returning();
+			return updated ? { type: 'success' as const, application: updated } : notFound;
 		},
 
 		async submitApplication(postingId: string, input: ApplicationInput) {
