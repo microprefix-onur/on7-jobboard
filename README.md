@@ -98,4 +98,4 @@ The domain vocabulary is defined in [`GLOSSARY.md`](GLOSSARY.md), including the 
 
 ## Not included
 
-Emails of any kind, teams or organisations, rate limiting, file uploads, search and pagination are out of scope. The domain module is the single place to add them later.
+Emails of any kind, teams or organisations, rate limiting, file uploads, search and pagination are out of scope. Emails, teams and rate limiting would hook into the domain module, which every write already goes through.

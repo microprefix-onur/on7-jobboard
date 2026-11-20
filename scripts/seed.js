@@ -13,9 +13,16 @@ if (!url) throw new Error('DATABASE_URL is not set');
 const sql = postgres(url, { max: 1, onnotice: () => {} });
 
 try {
-	const [existing] = await sql`select id from "user" where email = ${DEMO_EMAIL}`;
-	if (existing) {
+	const [existing] = await sql`
+		select u.id, exists(select 1 from job_posting p where p.recruiter_id = u.id) as has_postings
+		from "user" u where u.email = ${DEMO_EMAIL}`;
+	if (existing?.has_postings) {
 		console.log(`Demo data already exists (${DEMO_EMAIL}); nothing to do.`);
+	} else if (existing) {
+		console.error(
+			`${DEMO_EMAIL} is already registered without demo data. Delete that account or seed a fresh database.`
+		);
+		process.exitCode = 1;
 	} else {
 		await sql.begin(seed);
 		console.log(`Demo data created. Log in as ${DEMO_EMAIL} / ${DEMO_PASSWORD}.`);
@@ -26,7 +33,8 @@ try {
 
 /** @param {import('postgres').TransactionSql} tx */
 async function seed(tx) {
-	// The same rows better-auth's email-and-password sign-up writes: a user and a credential account.
+	// The same rows better-auth's email-and-password sign-up writes: a user and a credential account
+	// (see better-auth/dist/api/routes/sign-up.mjs, checked against better-auth 1.7).
 	const recruiterId = randomUUID();
 	await tx`
 		insert into "user" (id, name, email, email_verified)
@@ -36,6 +44,7 @@ async function seed(tx) {
 		values (${randomUUID()}, ${recruiterId}, 'credential', ${recruiterId},
 			${await hashPassword(DEMO_PASSWORD)}, now())`;
 
+	// Status values must match postingStatuses and applicationStatuses in src/lib/schemas/.
 	const postings = [
 		{
 			title: 'Backend-Entwickler (m/w/d)',
@@ -44,12 +53,20 @@ async function seed(tx) {
 			status: 'open',
 			applications: [
 				{
-					name: 'Lena Fischer',
+					applicantName: 'Lena Fischer',
 					status: 'new',
-					text: 'Ich arbeite seit drei Jahren mit TypeScript.'
+					coverText: 'Ich arbeite seit drei Jahren mit TypeScript.'
 				},
-				{ name: 'Murat Yilmaz', status: 'invited', text: 'Postgres ist mein Lieblingswerkzeug.' },
-				{ name: 'Sophie Wagner', status: 'rejected', text: 'Ich suche eine Stelle in Teilzeit.' }
+				{
+					applicantName: 'Murat Yilmaz',
+					status: 'invited',
+					coverText: 'Postgres ist mein Lieblingswerkzeug.'
+				},
+				{
+					applicantName: 'Sophie Wagner',
+					status: 'rejected',
+					coverText: 'Ich suche eine Stelle in Teilzeit.'
+				}
 			]
 		},
 		{
@@ -58,9 +75,9 @@ async function seed(tx) {
 			status: 'open',
 			applications: [
 				{
-					name: 'Jonas Becker',
+					applicantName: 'Jonas Becker',
 					status: 'new',
-					text: 'Hier ist mein Portfolio: Figma, Prototypen, Tests.'
+					coverText: 'Hier ist mein Portfolio: Figma, Prototypen, Tests.'
 				}
 			]
 		},
@@ -69,7 +86,11 @@ async function seed(tx) {
 			description: 'Diese Stelle ist bereits besetzt.',
 			status: 'closed',
 			applications: [
-				{ name: 'Clara Hoffmann', status: 'invited', text: 'Ich studiere Medienwirtschaft.' }
+				{
+					applicantName: 'Clara Hoffmann',
+					status: 'invited',
+					coverText: 'Ich studiere Medienwirtschaft.'
+				}
 			]
 		}
 	];
@@ -81,10 +102,10 @@ async function seed(tx) {
 			values (${recruiterId}, ${posting.title}, ${posting.description}, ${posting.status})
 			returning id`;
 		for (const application of posting.applications) {
-			const email = `${application.name.toLowerCase().replace(' ', '.')}@example.com`;
+			const email = `${application.applicantName.toLowerCase().replaceAll(' ', '.')}@example.com`;
 			await tx`
 				insert into application (job_posting_id, applicant_name, applicant_email, cover_text, status)
-				values (${id}, ${application.name}, ${email}, ${application.text}, ${application.status})`;
+				values (${id}, ${application.applicantName}, ${email}, ${application.coverText}, ${application.status})`;
 		}
 	}
 }
