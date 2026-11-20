@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -17,7 +18,12 @@
 		<ul class="divide-y divide-gray-200 rounded border border-gray-200">
 			{#each data.postings as posting (posting.id)}
 				<li class="px-4 py-3">
-					<span class="font-medium">{posting.title}</span>
+					<a
+						href={resolve('/postings/[id]', { id: posting.id })}
+						class="font-medium hover:underline"
+					>
+						{posting.title}
+					</a>
 					<span class="block text-sm text-gray-500">
 						Veröffentlicht am {posting.createdAt.toLocaleDateString('de-DE')}
 					</span>

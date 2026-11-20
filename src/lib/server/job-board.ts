@@ -5,8 +5,9 @@ import {
 	postingStatusSchema,
 	type JobPostingInput
 } from '../schemas/job-posting';
+import { applicationSchema, type ApplicationInput } from '../schemas/application';
 import type { Database } from './db/client';
-import { jobPosting } from './db/schema';
+import { application, jobPosting } from './db/schema';
 
 // The domain module: every business rule of the job board lives here.
 // Routes only authenticate, call into it and map its results to responses.
@@ -51,6 +52,21 @@ export function createJobBoard(db: Database) {
 				.orderBy(desc(jobPosting.createdAt));
 		},
 
+		async getPublicPosting(postingId: string) {
+			if (!isUuid(postingId)) return notFound;
+
+			const [posting] = await db
+				.select({
+					id: jobPosting.id,
+					title: jobPosting.title,
+					description: jobPosting.description,
+					status: jobPosting.status
+				})
+				.from(jobPosting)
+				.where(eq(jobPosting.id, postingId));
+			return posting ? { type: 'success' as const, posting } : notFound;
+		},
+
 		async getOwnPosting(recruiterId: string, postingId: string) {
 			if (!isUuid(postingId)) return notFound;
 
@@ -73,6 +89,44 @@ export function createJobBoard(db: Database) {
 			if (!parsed.success) return invalid(parsed.error);
 
 			return updateOwnPosting(recruiterId, postingId, parsed.data);
+		},
+
+		async submitApplication(postingId: string, input: ApplicationInput) {
+			const parsed = applicationSchema.safeParse(input);
+			if (!parsed.success) return invalid(parsed.error);
+			const data = parsed.data;
+			if (!isUuid(postingId)) return notFound;
+
+			// Locking the job posting row makes a concurrent close wait until this insert is done,
+			// so a job posting closed mid-submit can't receive an application.
+			try {
+				return await db.transaction(async (tx) => {
+					const [posting] = await tx
+						.select({ status: jobPosting.status })
+						.from(jobPosting)
+						.where(eq(jobPosting.id, postingId))
+						.for('share');
+					if (!posting) return notFound;
+					if (posting.status !== 'open') return { type: 'posting-closed' as const };
+
+					const [created] = await tx
+						.insert(application)
+						.values({
+							jobPostingId: postingId,
+							applicantName: data.name,
+							applicantEmail: data.email,
+							coverText: data.coverText
+						})
+						.returning();
+					return { type: 'success' as const, application: created };
+				});
+			} catch (error) {
+				// The unique constraint also catches two simultaneous submissions.
+				if (isUniqueViolation(error, 'application_one_per_email')) {
+					return { type: 'already-applied' as const };
+				}
+				throw error;
+			}
 		},
 
 		async createPosting(recruiterId: string, input: JobPostingInput) {
@@ -102,4 +156,16 @@ function isUuid(id: string) {
 // Ownership is part of the query: another recruiter's job posting matches nothing.
 function ownPostingFilter(recruiterId: string, postingId: string) {
 	return and(eq(jobPosting.id, postingId), eq(jobPosting.recruiterId, recruiterId));
+}
+
+function isUniqueViolation(error: unknown, constraint: string) {
+	const cause = error instanceof Error ? error.cause : undefined;
+	return (
+		typeof cause === 'object' &&
+		cause !== null &&
+		'code' in cause &&
+		cause.code === '23505' &&
+		'constraint_name' in cause &&
+		cause.constraint_name === constraint
+	);
 }

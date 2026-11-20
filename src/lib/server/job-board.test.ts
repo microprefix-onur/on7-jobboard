@@ -215,3 +215,124 @@ describe('setPostingStatus', () => {
 		expect(await jobBoard.listOpenPostings()).toHaveLength(1);
 	});
 });
+
+describe('submitApplication', () => {
+	const applicant = {
+		name: 'Alex Applicant',
+		email: 'alex@example.com',
+		coverText: 'Ich koche gern.'
+	};
+
+	it('accepts an application to an open job posting, starting as new', async () => {
+		const posting = await insertJobPosting({ status: 'open' });
+
+		const result = await jobBoard.submitApplication(posting.id, {
+			...applicant,
+			email: '  Alex@Example.COM '
+		});
+
+		expect(result).toMatchObject({
+			type: 'success',
+			application: {
+				jobPostingId: posting.id,
+				applicantName: 'Alex Applicant',
+				applicantEmail: 'alex@example.com',
+				coverText: 'Ich koche gern.',
+				status: 'new'
+			}
+		});
+	});
+
+	it('rejects an application to a closed job posting and saves nothing', async () => {
+		const recruiter = await insertRecruiter();
+		const posting = await insertJobPosting({ recruiterId: recruiter.id, status: 'closed' });
+
+		expect(await jobBoard.submitApplication(posting.id, applicant)).toEqual({
+			type: 'posting-closed'
+		});
+
+		// Nothing was saved: once reopened, the same email can still apply.
+		await jobBoard.setPostingStatus(recruiter.id, posting.id, 'open');
+		expect(await jobBoard.submitApplication(posting.id, applicant)).toMatchObject({
+			type: 'success'
+		});
+	});
+
+	it('rejects a second application with the same email to the same job posting', async () => {
+		const posting = await insertJobPosting();
+		await jobBoard.submitApplication(posting.id, applicant);
+
+		expect(
+			await jobBoard.submitApplication(posting.id, { ...applicant, email: ' ALEX@example.com ' })
+		).toEqual({ type: 'already-applied' });
+	});
+
+	it('lets only one of two simultaneous submissions with the same email through', async () => {
+		const posting = await insertJobPosting();
+
+		const results = await Promise.all([
+			jobBoard.submitApplication(posting.id, applicant),
+			jobBoard.submitApplication(posting.id, applicant)
+		]);
+
+		expect(results.map((r) => r.type).sort()).toEqual(['already-applied', 'success']);
+	});
+
+	it('accepts the same email on a different job posting', async () => {
+		const first = await insertJobPosting();
+		const second = await insertJobPosting();
+		await jobBoard.submitApplication(first.id, applicant);
+
+		expect(await jobBoard.submitApplication(second.id, applicant)).toMatchObject({
+			type: 'success'
+		});
+	});
+
+	it.each([
+		{ case: 'an empty name', input: { name: '  ' }, field: 'name' },
+		{ case: 'a too long name', input: { name: 'x'.repeat(101) }, field: 'name' },
+		{ case: 'a malformed email', input: { email: 'alex@' }, field: 'email' },
+		{
+			case: 'a too long email',
+			input: { email: `${'x'.repeat(250)}@example.com` },
+			field: 'email'
+		},
+		{ case: 'an empty cover text', input: { coverText: '' }, field: 'coverText' },
+		{ case: 'a too long cover text', input: { coverText: 'x'.repeat(2001) }, field: 'coverText' }
+	])('rejects $case with a field error', async ({ input, field }) => {
+		const posting = await insertJobPosting();
+
+		expect(await jobBoard.submitApplication(posting.id, { ...applicant, ...input })).toEqual({
+			type: 'invalid',
+			fieldErrors: { [field]: [expect.any(String)] }
+		});
+	});
+
+	it('returns not found for an unknown or malformed job posting id', async () => {
+		for (const id of [randomUUID(), 'not-a-uuid']) {
+			expect(await jobBoard.submitApplication(id, applicant)).toEqual({ type: 'not-found' });
+		}
+	});
+});
+
+describe('getPublicPosting', () => {
+	it('returns open and closed job postings without revealing the recruiter', async () => {
+		const open = await insertJobPosting({ title: 'Gärtner', description: 'Zeile 1\nZeile 2' });
+		const closed = await insertJobPosting({ title: 'Maler', status: 'closed' });
+
+		expect(await jobBoard.getPublicPosting(open.id)).toEqual({
+			type: 'success',
+			posting: { id: open.id, title: 'Gärtner', description: 'Zeile 1\nZeile 2', status: 'open' }
+		});
+		expect(await jobBoard.getPublicPosting(closed.id)).toMatchObject({
+			type: 'success',
+			posting: { title: 'Maler', status: 'closed' }
+		});
+	});
+
+	it('returns not found for an unknown or malformed id', async () => {
+		for (const id of [randomUUID(), 'not-a-uuid']) {
+			expect(await jobBoard.getPublicPosting(id)).toEqual({ type: 'not-found' });
+		}
+	});
+});
