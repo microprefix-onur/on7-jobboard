@@ -383,6 +383,7 @@ describe('listApplications', () => {
 
 		expect(result.type).toBe('success');
 		if (result.type !== 'success') return;
+		expect(result.posting).toEqual({ id: posting.id, title: posting.title, status: 'open' });
 		expect(result.applications.map((a) => a.applicantName)).toEqual(['Zweite', 'Erste']);
 		expect(result.applications[0]).toMatchObject({
 			applicantName: 'Zweite',

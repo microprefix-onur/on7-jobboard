@@ -3,7 +3,7 @@ import { fail, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { jobPostingSchema } from '#lib/schemas/job-posting.ts';
 import { jobBoard } from '#lib/server/app.ts';
-import { postingNotFound, failWithFieldErrors } from '#lib/server/responses.ts';
+import { failWithFieldErrors, formText, postingNotFound } from '#lib/server/responses.ts';
 import { requireRecruiterId } from '#lib/server/recruiter.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -35,13 +35,9 @@ export const actions: Actions = {
 
 	setStatus: async ({ request, locals, params }) => {
 		const recruiterId = requireRecruiterId(locals);
-		const status = (await request.formData()).get('status');
+		const status = formText(await request.formData(), 'status');
 
-		const result = await jobBoard.setPostingStatus(
-			recruiterId,
-			params.id,
-			typeof status === 'string' ? status : ''
-		);
+		const result = await jobBoard.setPostingStatus(recruiterId, params.id, status);
 		if (result.type === 'not-found') postingNotFound();
 		if (result.type === 'invalid') error(400, 'Ungültiger Status.');
 	}

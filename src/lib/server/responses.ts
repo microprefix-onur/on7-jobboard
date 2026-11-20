@@ -19,3 +19,9 @@ export function failWithFieldErrors<T extends Record<string, unknown>>(
 	}
 	return fail(400, { form });
 }
+
+// Reads a plain form field; anything else (missing, a file) becomes an empty string.
+export function formText(formData: FormData, name: string): string {
+	const value = formData.get(name);
+	return typeof value === 'string' ? value : '';
+}

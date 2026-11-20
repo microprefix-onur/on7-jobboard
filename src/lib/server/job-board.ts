@@ -1,4 +1,5 @@
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import {
 	jobPostingSchema,
@@ -101,11 +102,12 @@ export function createJobBoard(db: Database) {
 		async listApplications(recruiterId: string, postingId: string) {
 			if (!isUuid(postingId)) return notFound;
 			const [posting] = await db
-				.select({ id: jobPosting.id })
+				.select({ id: jobPosting.id, title: jobPosting.title, status: jobPosting.status })
 				.from(jobPosting)
 				.where(ownPostingFilter(recruiterId, postingId));
 			if (!posting) return notFound;
 
+			// Filtered by the owning recruiter as well, not only by the check above.
 			const applications = await db
 				.select({
 					id: application.id,
@@ -116,9 +118,10 @@ export function createJobBoard(db: Database) {
 					createdAt: application.createdAt
 				})
 				.from(application)
-				.where(eq(application.jobPostingId, postingId))
-				.orderBy(desc(application.createdAt));
-			return { type: 'success' as const, applications };
+				.innerJoin(jobPosting, eq(jobPosting.id, application.jobPostingId))
+				.where(ownPostingFilter(recruiterId, postingId))
+				.orderBy(desc(application.createdAt), desc(application.id));
+			return { type: 'success' as const, posting, applications };
 		},
 
 		async setApplicationStatus(recruiterId: string, applicationId: string, status: string) {
@@ -126,22 +129,10 @@ export function createJobBoard(db: Database) {
 			const parsed = applicationStatusSchema.safeParse({ status });
 			if (!parsed.success) return invalid(parsed.error);
 
-			// Ownership is part of the update: only applications to the recruiter's own job postings match.
 			const [updated] = await db
 				.update(application)
 				.set(parsed.data)
-				.where(
-					and(
-						eq(application.id, applicationId),
-						inArray(
-							application.jobPostingId,
-							db
-								.select({ id: jobPosting.id })
-								.from(jobPosting)
-								.where(eq(jobPosting.recruiterId, recruiterId))
-						)
-					)
-				)
+				.where(ownApplicationFilter(recruiterId, applicationId))
 				.returning();
 			return updated ? { type: 'success' as const, application: updated } : notFound;
 		},
@@ -211,6 +202,20 @@ function isUuid(id: string) {
 // Ownership is part of the query: another recruiter's job posting matches nothing.
 function ownPostingFilter(recruiterId: string, postingId: string) {
 	return and(eq(jobPosting.id, postingId), eq(jobPosting.recruiterId, recruiterId));
+}
+
+// Only applications to the recruiter's own job postings match.
+function ownApplicationFilter(recruiterId: string, applicationId: string) {
+	return and(
+		eq(application.id, applicationId),
+		inArray(
+			application.jobPostingId,
+			new QueryBuilder()
+				.select({ id: jobPosting.id })
+				.from(jobPosting)
+				.where(eq(jobPosting.recruiterId, recruiterId))
+		)
+	);
 }
 
 function isUniqueViolation(error: unknown, constraint: string) {
