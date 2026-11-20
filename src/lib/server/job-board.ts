@@ -11,6 +11,21 @@ import { jobPosting } from './db/schema';
 // The domain module: every business rule of the job board lives here.
 // Routes only authenticate, call into it and map its results to responses.
 export function createJobBoard(db: Database) {
+	async function updateOwnPosting(
+		recruiterId: string,
+		postingId: string,
+		values: Partial<typeof jobPosting.$inferInsert>
+	) {
+		if (!isUuid(postingId)) return notFound;
+
+		const [posting] = await db
+			.update(jobPosting)
+			.set(values)
+			.where(ownPostingFilter(recruiterId, postingId))
+			.returning();
+		return posting ? { type: 'success' as const, posting } : notFound;
+	}
+
 	return {
 		listOpenPostings() {
 			return db
@@ -37,39 +52,27 @@ export function createJobBoard(db: Database) {
 		},
 
 		async getOwnPosting(recruiterId: string, postingId: string) {
-			if (!isId(postingId)) return notFound;
+			if (!isUuid(postingId)) return notFound;
 
 			const [posting] = await db
 				.select()
 				.from(jobPosting)
-				.where(ownPosting(recruiterId, postingId));
+				.where(ownPostingFilter(recruiterId, postingId));
 			return posting ? { type: 'success' as const, posting } : notFound;
 		},
 
 		async updatePosting(recruiterId: string, postingId: string, input: JobPostingInput) {
 			const parsed = jobPostingSchema.safeParse(input);
 			if (!parsed.success) return invalid(parsed.error);
-			if (!isId(postingId)) return notFound;
 
-			const [posting] = await db
-				.update(jobPosting)
-				.set(parsed.data)
-				.where(ownPosting(recruiterId, postingId))
-				.returning();
-			return posting ? { type: 'success' as const, posting } : notFound;
+			return updateOwnPosting(recruiterId, postingId, parsed.data);
 		},
 
 		async setPostingStatus(recruiterId: string, postingId: string, status: string) {
 			const parsed = postingStatusSchema.safeParse({ status });
 			if (!parsed.success) return invalid(parsed.error);
-			if (!isId(postingId)) return notFound;
 
-			const [posting] = await db
-				.update(jobPosting)
-				.set(parsed.data)
-				.where(ownPosting(recruiterId, postingId))
-				.returning();
-			return posting ? { type: 'success' as const, posting } : notFound;
+			return updateOwnPosting(recruiterId, postingId, parsed.data);
 		},
 
 		async createPosting(recruiterId: string, input: JobPostingInput) {
@@ -92,11 +95,11 @@ function invalid<T>(error: z.ZodError<T>) {
 const notFound = { type: 'not-found' } as const;
 
 // Malformed ids from URLs are simply not found, rather than a database error.
-function isId(id: string) {
+function isUuid(id: string) {
 	return z.uuid().safeParse(id).success;
 }
 
 // Ownership is part of the query: another recruiter's job posting matches nothing.
-function ownPosting(recruiterId: string, postingId: string) {
+function ownPostingFilter(recruiterId: string, postingId: string) {
 	return and(eq(jobPosting.id, postingId), eq(jobPosting.recruiterId, recruiterId));
 }

@@ -8,7 +8,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const result = await jobBoard.getOwnPosting(requireRecruiterId(locals), params.id);
-	if (result.type === 'not-found') error(404, 'Diese Stelle gibt es nicht.');
+	if (result.type === 'not-found') postingNotFound();
 
 	const { title, description, status } = result.posting;
 	return {
@@ -24,7 +24,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const result = await jobBoard.updatePosting(recruiterId, params.id, form.data);
-		if (result.type === 'not-found') error(404, 'Diese Stelle gibt es nicht.');
+		if (result.type === 'not-found') postingNotFound();
 		if (result.type === 'invalid') {
 			for (const [field, messages] of Object.entries(result.fieldErrors)) {
 				setError(form, field as keyof typeof form.data, messages ?? []);
@@ -44,7 +44,11 @@ export const actions: Actions = {
 			params.id,
 			typeof status === 'string' ? status : ''
 		);
-		if (result.type === 'not-found') error(404, 'Diese Stelle gibt es nicht.');
+		if (result.type === 'not-found') postingNotFound();
 		if (result.type === 'invalid') error(400, 'Ungültiger Status.');
 	}
 };
+
+function postingNotFound(): never {
+	error(404, 'Diese Stelle gibt es nicht.');
+}

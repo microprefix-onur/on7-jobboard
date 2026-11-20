@@ -1,9 +1,10 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { postingStatuses } from '../../schemas/job-posting';
 import { user } from './auth.schema';
 
 export * from './auth.schema';
 
-export const postingStatus = pgEnum('posting_status', ['open', 'closed']);
+export const postingStatus = pgEnum('posting_status', postingStatuses);
 
 export const jobPosting = pgTable('job_posting', {
 	id: uuid('id').primaryKey().defaultRandom(),
