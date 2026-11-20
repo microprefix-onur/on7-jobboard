@@ -27,7 +27,12 @@
 		<ul class="divide-y divide-gray-200 rounded border border-gray-200">
 			{#each data.postings as posting (posting.id)}
 				<li class="flex items-center justify-between px-4 py-3">
-					<span class="font-medium">{posting.title}</span>
+					<a
+						href={resolve('/recruiter/postings/[id]/edit', { id: posting.id })}
+						class="font-medium hover:underline"
+					>
+						{posting.title}
+					</a>
 					<span
 						class={[
 							'rounded px-2 py-0.5 text-xs',

@@ -15,3 +15,7 @@ export const jobPostingSchema = z.object({
 });
 
 export type JobPostingInput = z.input<typeof jobPostingSchema>;
+
+export const postingStatusSchema = z.object({
+	status: z.enum(['open', 'closed'], 'Bitte wähle einen gültigen Status.')
+});
