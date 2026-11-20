@@ -21,7 +21,8 @@
 		"db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
 		"db:studio": "drizzle-kit studio",
 		"test:watch": "vitest",
-		"auth:schema": "auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes"
+		"auth:schema": "auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes",
+		"db:seed": "node --env-file-if-exists=.env scripts/seed.js"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -31,7 +32,6 @@
 		"@tailwindcss/vite": "^4.3.5",
 		"@types/node": "^26",
 		"auth": "^1.7.25",
-		"better-auth": "^1.7.25",
 		"drizzle-kit": "^0.31.11",
 		"eslint": "^10.15.0",
 		"eslint-config-prettier": "^10.1.8",
@@ -51,6 +51,7 @@
 		"zod": "^4.6.7"
 	},
 	"dependencies": {
+		"better-auth": "^1.7.26",
 		"drizzle-orm": "^0.45.4",
 		"postgres": "^4.1.1"
 	},
