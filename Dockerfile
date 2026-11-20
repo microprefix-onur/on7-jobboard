@@ -9,7 +9,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 # SvelteKit validates env vars while analysing routes at build time; the real values are read at startup.
-RUN DATABASE_URL=postgres://build-placeholder pnpm build
+RUN DATABASE_URL=postgres://build-placeholder ORIGIN=http://build-placeholder BETTER_AUTH_SECRET=build-placeholder pnpm build
 
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
