@@ -25,8 +25,7 @@ export function createJobBoard(db: Database) {
 				.select({
 					id: jobPosting.id,
 					title: jobPosting.title,
-					status: jobPosting.status,
-					createdAt: jobPosting.createdAt
+					status: jobPosting.status
 				})
 				.from(jobPosting)
 				.where(eq(jobPosting.recruiterId, recruiterId))
