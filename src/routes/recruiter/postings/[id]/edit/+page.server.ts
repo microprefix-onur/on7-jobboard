@@ -1,8 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
-import { fail, setError, superValidate } from 'sveltekit-superforms';
+import { fail, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { jobPostingSchema } from '#lib/schemas/job-posting.ts';
 import { jobBoard } from '#lib/server/app.ts';
+import { postingNotFound, failWithFieldErrors } from '#lib/server/responses.ts';
 import { requireRecruiterId } from '#lib/server/recruiter.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -26,10 +27,7 @@ export const actions: Actions = {
 		const result = await jobBoard.updatePosting(recruiterId, params.id, form.data);
 		if (result.type === 'not-found') postingNotFound();
 		if (result.type === 'invalid') {
-			for (const [field, messages] of Object.entries(result.fieldErrors)) {
-				setError(form, field as keyof typeof form.data, messages ?? []);
-			}
-			return fail(400, { form });
+			return failWithFieldErrors(form, result.fieldErrors);
 		}
 
 		redirect(303, '/recruiter');
@@ -48,7 +46,3 @@ export const actions: Actions = {
 		if (result.type === 'invalid') error(400, 'Ungültiger Status.');
 	}
 };
-
-function postingNotFound(): never {
-	error(404, 'Diese Stelle gibt es nicht.');
-}

@@ -267,7 +267,7 @@ describe('submitApplication', () => {
 		).toEqual({ type: 'already-applied' });
 	});
 
-	it('lets only one of two simultaneous submissions with the same email through', async () => {
+	it('lets only one of two simultaneous applications with the same email through', async () => {
 		const posting = await insertJobPosting();
 
 		const results = await Promise.all([

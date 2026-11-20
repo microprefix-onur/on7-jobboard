@@ -1,8 +1,9 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { fail, message, setError, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { applicationSchema } from '#lib/schemas/application.ts';
 import { jobBoard } from '#lib/server/app.ts';
+import { postingNotFound, failWithFieldErrors } from '#lib/server/responses.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -23,10 +24,7 @@ export const actions: Actions = {
 				redirect(303, `/postings/${params.id}/applied`);
 				break;
 			case 'invalid':
-				for (const [field, messages] of Object.entries(result.fieldErrors)) {
-					setError(form, field as keyof typeof form.data, messages ?? []);
-				}
-				return fail(400, { form });
+				return failWithFieldErrors(form, result.fieldErrors);
 			case 'already-applied':
 				return setError(
 					form,
@@ -41,7 +39,3 @@ export const actions: Actions = {
 		}
 	}
 };
-
-function postingNotFound(): never {
-	error(404, 'Diese Stelle gibt es nicht.');
-}

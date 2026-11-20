@@ -92,13 +92,13 @@ export function createJobBoard(db: Database) {
 		},
 
 		async submitApplication(postingId: string, input: ApplicationInput) {
+			if (!isUuid(postingId)) return notFound;
 			const parsed = applicationSchema.safeParse(input);
 			if (!parsed.success) return invalid(parsed.error);
 			const data = parsed.data;
-			if (!isUuid(postingId)) return notFound;
 
 			// Locking the job posting row makes a concurrent close wait until this insert is done,
-			// so a job posting closed mid-submit can't receive an application.
+			// so a job posting closed while someone applies can't receive the application.
 			try {
 				return await db.transaction(async (tx) => {
 					const [posting] = await tx
@@ -121,7 +121,7 @@ export function createJobBoard(db: Database) {
 					return { type: 'success' as const, application: created };
 				});
 			} catch (error) {
-				// The unique constraint also catches two simultaneous submissions.
+				// The unique constraint also catches two simultaneous applications.
 				if (isUniqueViolation(error, 'application_one_per_email')) {
 					return { type: 'already-applied' as const };
 				}
