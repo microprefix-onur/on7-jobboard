@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: jobboard
+      POSTGRES_PASSWORD: jobboard
+      POSTGRES_DB: jobboard
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jobboard -d jobboard']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  migrate:
+    build: .
+    command: ['node', 'scripts/migrate.js']
+    environment:
+      DATABASE_URL: postgres://jobboard:jobboard@postgres:5432/jobboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://jobboard:jobboard@postgres:5432/jobboard
+      ORIGIN: http://localhost:3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
