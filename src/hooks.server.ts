@@ -5,11 +5,11 @@ import { auth } from '#lib/server/auth.ts';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const session = await auth.api.getSession({ headers: event.request.headers });
+	const authSession = await auth.api.getSession({ headers: event.request.headers });
 
-	if (session) {
-		event.locals.session = session.session;
-		event.locals.user = session.user;
+	if (authSession) {
+		event.locals.session = authSession.session;
+		event.locals.user = authSession.user;
 	}
 
 	// Guarding here (not in a layout load) also protects form actions under /recruiter.
