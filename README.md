@@ -96,6 +96,28 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push:
 
 The domain vocabulary is defined in [`GLOSSARY.md`](GLOSSARY.md), including the German UI word for each term.
 
-## Not included
+## My decisions
 
-Emails of any kind, teams or organisations, rate limiting, file uploads, search and pagination are out of scope. Emails, teams and rate limiting would hook into the domain module, which every write already goes through.
+In the first place the form validation with superforms and zod. It combines the client and server side validation and superforms works great with zod.
+
+The ui system was plain input and textareas, I decided to change the overall look to be minimal but also accessable with shadcn library.
+
+I planed the whole project together with claude code and the matt popock skills (which is very helpful and simple to use, nice suggestion by the way). So in every part of this work are decisions of me.
+
+## What the AI could do better
+
+Honestly the AI did a very good work. I think a big help was the skill base of matt popock. In combination the task could be split in tickets and sub tickets, so that there was not one huge prompt but a step by step implementation of features.
+
+If I did it without these skills there could be problems like inconsistency and loops of misunderstandings.
+
+## Future Features
+
+First of all the design should be better. The design updates with shadcn are not implemented in this version, they are already added to the github tickets. I wanted to focus on features more than looks in the first place.
+
+Beneath that I would implement the mail logic for sending automatic mails to the applicant and the recruiter so that no updates are lost or checked too late.
+
+Teams would be a feature which is needed, if the recruiter just makes the job listings but wants to pass it to the person who can really check the cv and application.
+
+Another improvement would be a direct invitation with teams or google meet link added, so that there can be a processing state for the applicant with applied, reviewed, call initialized, approved.
+
+AI can also be integrated. The applicant can upload his cv and the AI decides which job listings are best fit. Also for first job interview with chat or if it should be advanced with a video agent.
